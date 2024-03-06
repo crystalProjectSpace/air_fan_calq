@@ -32,7 +32,7 @@ const interp = function(VX, VY, X) {
 * @description получить распределение локальных скоростей и углов атаки по лопасти винта
 */
 const getSpeedDistribution = function(RPM, R, v0, N) {
-	const omega = 2 * Math.PI * RPM
+	const omega = 2 * Math.PI * RPM / 60
 	const res = []
 
 	const dR = R / N
@@ -69,7 +69,7 @@ const getSpeedDistribution = function(RPM, R, v0, N) {
 * @param VX - опорные значения скорости
 * @param dAVX - опорный угол для изменения шага винта в зависимости от скорости
 */
-const getSingleBladeForces = function(RX, AX, SX, Cx0, RPM, v0, Ro, AX_CY, CY, POLAR, VX = [], dAVX = []) {
+const getSingleBladeForces = function(RX, AX, SX, RPM, v0, Ro, AX_CY, CY, CX, VX = [], dAVX = []) {
 	const N = RX.length
 	const R = RX[N - 1]
 	
@@ -91,8 +91,7 @@ const getSingleBladeForces = function(RX, AX, SX, Cx0, RPM, v0, Ro, AX_CY, CY, P
 		const localQS = bladeSectionArea * localQ
 		const totalAoA = bladeSectionAoA + localAoA + dAlpha
 		const Cya = interp(AX_CY, CY, totalAoA)
-		const aPolar = interp(AX_CY, POLAR, totalAoA)
-		const Cxa = Cx0 + aPolar * Cya * Cya
+		const Cxa = interp(AX_CY, CX, totalAoA)
 		const localThrust = Cya * localQS
 		const localDrag = Cxa * localQS
 		const localTorque = localDrag * range
@@ -124,10 +123,10 @@ const getSingleBladeForces = function(RX, AX, SX, Cx0, RPM, v0, Ro, AX_CY, CY, P
 */
 const getSpeedThrustPerformance = function(initData) {
 	const { nBlade, RX, SX, AX, VX = [], dAVX = [] } = initData.geometry
-	const { AX_CY, Cx0, CY, POLAR } = initData.aerodynamics
+	const { AX_CY, CY, CX } = initData.aerodynamics
 	const { RPM, v0, v1, nV, Ro } = initData.environment
 	
-	const omega = 2 * Math.PI * RPM
+	const omega = 2 * Math.PI * RPM / 60
 	const rad = RX[RX.length - 1]
 	const area = Math.PI * rad * rad
 	const dV = (v1 - v0) / nV
@@ -135,9 +134,9 @@ const getSpeedThrustPerformance = function(initData) {
 	const _nV = nV + 1
 
 	let V = v0
-	
+
 	for(let i = 0; i < _nV; i++) {
-		const bladePerformance = getSingleBladeForces(RX, AX, SX, Cx0, RPM, V, Ro, AX_CY, CY, POLAR, VX, dAVX)
+		const bladePerformance = getSingleBladeForces(RX, AX, SX, RPM, V, Ro, AX_CY, CY, CX, VX, dAVX)
 		const { totalThrust, totalDrag, totalTorque } = bladePerformance.summary
 	
 		const Q = 0.5 * Ro * V * V
@@ -161,28 +160,26 @@ const getSpeedThrustPerformance = function(initData) {
 	
 	return res
 }
-// Начало тестового примера (16-дюймовый винт)
-const baseRPM = 95
+
+const baseRPM = 2500
 // срезы по длине винта
-const testRange =  [0, 0.02, 0.04, 0.06, 0.08, 0.1, 0.12, 0.14, 0.16, 0.18, 0.2]
+const testRange =  [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
 // угловая крутка профиля по длине лопасти
-const testAlphaDistrib = [12.5, 12.5, 11.5, 9.5, 8.5, 8.5, 5.5, 5, 5, 5, 5]
+const testAlphaDistrib = [17.5, 15.5, 13.5, 11.5, 9.5, 7.5, 5.5, 3.5, 1.5, -0.5, -0.5]
 // площади по срезам винта
-const testAreaDistrib = [0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002, 0.0002]
+const testAreaDistrib = [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01]
 // тестовые скорости
-const testV          = [0, 25, 50, 75, 100, 125, 150, 175, 200, 225, 250, 275]
+const testV          = [0, 40, 60, 80, 100, 120, 140]
 // отклонение лопасти винта от скорости
-const testDeltaBlade = [6, 10, 14, 18, 22,  26,  30,  34,  38,  42,  46,  50]
+const testDeltaBlade = [0, 0, 0, 0, 0, 0, 0]//[0, 4, 6, 8, 10, 12, 14]
 // расчетный диапазон местных углов атаки
-const testFoilAlpha = [-60, -30,  -20,   -15,   -10,  -8,    -6,    -4,      0,     4,    6,    8,     10,   15,    20,    30, 60]
+const testFoilAlpha = [-32, -28,  -24,  -20,  -16,  -8,  0,  8,  16,  20,  24,  28,  32]
 // коэф.подъемной силы профиля от угла атаки
-const testFoilCy =    [-0.4, -0.8, -1.05, -0.95, -0.8, -0.64, -0.48, -0.32,   0,     0.32, 0.48, 0.64,  0.8,  0.95,  1.05,  0.8, 0.4]
+const testFoilCy = [-0.38239, -0.30265, -0.22263, -0.13628, -0.07003, 0.29496, 1.28453, 2.0334, 2.53601, 2.54411, 2.3579, 2.04756, 1.89981]
 // коэф.поляры для профиля
-const testFoilPolar = [0.75, 0.25, 0.175, 0.135, 0.105, 0.085, 0.07, 0.065, 0.065, 0.065,  0.07, 0.085,0.105,0.135, 0.175, 0.25, 0.75]
-// коэф.профильного сопротивления лопасти
-const Cx_0 = 0.045
+const testFoilCx = [0.40843, 0.34353, 0.27836, 0.22452, 0.18081, 0.09877, 0.07718, 0.141, 0.24166, 0.30899, 0.38833, 0.49155, 0.57683]
 // количество лопастей
-const testNBlade = 6
+const testNBlade = 4
 
 const testAirScrew = {
 	geometry: {
@@ -195,14 +192,13 @@ const testAirScrew = {
 	},
 	aerodynamics: {
 		AX_CY: testFoilAlpha,
-		Cx0: Cx_0,
 		CY: testFoilCy,
-		POLAR: testFoilPolar,
+		CX: testFoilCx,
 	},
 	environment: {
 		RPM: baseRPM,
 		v0: 0,
-		v1: 45,
+		v1: 60,
 		nV: 15,
 		Ro: 1.225
 	}
